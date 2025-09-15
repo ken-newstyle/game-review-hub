@@ -17,6 +17,7 @@ class Game(Base):
     released_on = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     cover_key = Column(String(512), nullable=True)
+    thumb_key = Column(String(512), nullable=True)
 
     reviews = relationship("Review", back_populates="game", cascade="all, delete-orphan")
 

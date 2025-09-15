@@ -7,6 +7,8 @@ from uuid import uuid4
 
 from minio import Minio
 from urllib.parse import urlparse, urlunparse
+from io import BytesIO
+from PIL import Image
 
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio")
 MINIO_PORT = int(os.getenv("MINIO_PORT", "9000"))
@@ -41,6 +43,10 @@ def new_cover_key(game_id: int, filename: str) -> str:
     return f"covers/{game_id}/{uuid4().hex}_{filename}"
 
 
+def new_thumb_key(game_id: int, filename: str) -> str:
+    return f"covers/{game_id}/thumb_{uuid4().hex}_{filename}.jpg"
+
+
 def put_object_from_fileobj(fileobj: BinaryIO, length: int, content_type: str, object_name: str) -> str:
     # minio-python は未知長ストリームに対応している（-1指定 + 10MBのパートサイズなど）が、
     # SDKが自動扱いするためlength=-1で渡す
@@ -70,3 +76,20 @@ def presigned_get_url(object_name: str, expires: int = 3600) -> str:
     except Exception:
         pass
     return url
+
+
+def delete_object(object_name: str) -> None:
+    try:
+        get_client().remove_object(MINIO_BUCKET, object_name)
+    except Exception:
+        # 存在しない等は学習用途のため握りつぶす
+        pass
+
+
+def generate_thumbnail(image_bytes: bytes, max_size: int = 320) -> bytes:
+    with Image.open(BytesIO(image_bytes)) as im:
+        im = im.convert("RGB")
+        im.thumbnail((max_size, max_size))
+        out = BytesIO()
+        im.save(out, format="JPEG", quality=85)
+        return out.getvalue()

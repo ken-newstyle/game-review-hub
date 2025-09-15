@@ -32,6 +32,7 @@ type Game = {
 }
 
 const apiBase = (import.meta.env.VITE_API_BASE as string) ?? 'http://localhost:4000/api'
+const backendBase = apiBase.replace(/\/_?api\/?$/, '/api').replace(/\/api$/, '')
 
 export default function App() {
   const [games, setGames] = useState<Game[]>([])
@@ -204,7 +205,7 @@ export default function App() {
                         <Flex gap={6} align={{ base: 'stretch', md: 'flex-start' }} justify="space-between" direction={{ base: 'column', md: 'row' }}>
                           <Box display="flex" gap={4} alignItems="flex-start">
                             {g.cover_url ? (
-                              <Image src={g.cover_url} alt={`${g.title} cover`} borderRadius="md" boxSize="120px" objectFit="cover" />
+                              <Image src={`${backendBase}/api/games/${g.id}/cover?size=thumb`} alt={`${g.title} cover`} borderRadius="md" boxSize="120px" objectFit="cover" loading="lazy" />
                             ) : (
                               <Box boxSize="120px" bg="gray.700" borderRadius="md" />
                             )}
@@ -216,8 +217,8 @@ export default function App() {
                           </Box>
                           <Box>
                             <ReviewBox gameId={g.id} onPosted={fetchGames} />
-                            {/* 画像アップロード（ログイン時） */}
-                            <CoverUpload tokenKey="access_token" gameId={g.id} onUploaded={fetchGames} />
+                            {/* 画像アップロード/削除（ログイン時） */}
+                            <CoverUpload tokenKey="access_token" gameId={g.id} coverUrl={g.cover_url || null} onChanged={fetchGames} />
                           </Box>
                         </Flex>
                       </CardBody>
@@ -260,6 +261,10 @@ function ReviewBox({ gameId, onPosted }: { gameId: number; onPosted: () => void 
         },
         body: JSON.stringify({ game_id: gameId, rating, comment: comment || null })
       })
+      if (res.status === 401) {
+        localStorage.removeItem('access_token')
+        throw new Error('認証が必要です。再ログインしてください')
+      }
       if (!res.ok) throw new Error(`Failed: ${res.status}`)
       setComment('')
       setRating(5)
@@ -287,29 +292,68 @@ function ReviewBox({ gameId, onPosted }: { gameId: number; onPosted: () => void 
   )
 }
 
-function CoverUpload({ tokenKey, gameId, onUploaded }: { tokenKey: string; gameId: number; onUploaded: () => void }) {
+function CoverUpload({ tokenKey, gameId, coverUrl, onChanged }: { tokenKey: string; gameId: number; coverUrl: string | null; onChanged: () => void }) {
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(0)
   const toast = useToast()
   const token = typeof window !== 'undefined' ? localStorage.getItem(tokenKey) : null
 
   const upload = async () => {
     if (!file || !token) return
     setBusy(true)
+    setProgress(0)
     try {
       const form = new FormData()
       form.append('file', file)
-      const res = await fetch(`${apiBase}/games/${gameId}/cover`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', `${apiBase}/games/${gameId}/cover`)
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100))
+        }
+        xhr.onload = () => {
+          if (xhr.status === 401) {
+            localStorage.removeItem('access_token')
+            reject(new Error('認証が必要です。再ログインしてください'))
+            return
+          }
+          if (xhr.status >= 200 && xhr.status < 300) resolve()
+          else reject(new Error(`HTTP ${xhr.status}`))
+        }
+        xhr.onerror = () => reject(new Error('network error'))
+        xhr.send(form)
       })
-      if (!res.ok) throw new Error(`Failed: ${res.status}`)
       setFile(null)
-      onUploaded()
+      onChanged()
       toast({ title: 'カバー画像を更新しました', status: 'success' })
     } catch (e: any) {
       toast({ title: 'アップロードに失敗', description: String(e.message ?? e), status: 'error' })
+    } finally {
+      setBusy(false)
+      setProgress(0)
+    }
+  }
+
+  const remove = async () => {
+    if (!token) return
+    setBusy(true)
+    try {
+      const res = await fetch(`${apiBase}/games/${gameId}/cover`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.status === 401) {
+        localStorage.removeItem('access_token')
+        throw new Error('認証が必要です。再ログインしてください')
+      }
+      if (!res.ok && res.status !== 204) throw new Error(`Failed: ${res.status}`)
+      setFile(null)
+      onChanged()
+      toast({ title: 'カバー画像を削除しました', status: 'success' })
+    } catch (e: any) {
+      toast({ title: '削除に失敗', description: String(e.message ?? e), status: 'error' })
     } finally {
       setBusy(false)
     }
@@ -320,7 +364,13 @@ function CoverUpload({ tokenKey, gameId, onUploaded }: { tokenKey: string; gameI
   return (
     <Stack mt={4} spacing={2}>
       <Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-      <Button size="sm" onClick={upload} isDisabled={!file} isLoading={busy} colorScheme="blue">カバーをアップロード</Button>
+      {progress > 0 && <Box><Box as='div' bg='blue.500' height='2' width={`${progress}%`} borderRadius='sm' /></Box>}
+      <Flex gap={2} wrap="wrap">
+        <Button size="sm" onClick={upload} isDisabled={!file} isLoading={busy} colorScheme="blue">カバーをアップロード</Button>
+        {coverUrl && (
+          <Button size="sm" onClick={remove} variant="outline" isLoading={busy} colorScheme="red">カバーを削除</Button>
+        )}
+      </Flex>
     </Stack>
   )
 }

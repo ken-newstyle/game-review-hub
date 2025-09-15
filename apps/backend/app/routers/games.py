@@ -7,6 +7,8 @@ from ..db import get_db
 from .. import models, schemas
 from .. import storage
 from fastapi import UploadFile, File
+from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 from ..auth import get_current_user
 
 
@@ -118,15 +120,82 @@ def upload_cover(
     game = db.get(models.Game, game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
-    key = storage.new_cover_key(game_id, file.filename)
+
+    # read file once
+    data = file.file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    # upload original
+    cover_key = storage.new_cover_key(game_id, file.filename)
     storage.put_object_from_fileobj(
-        file.file,
-        length=-1,
+        fileobj=BytesIO(data),
+        length=len(data),
         content_type=file.content_type or "application/octet-stream",
-        object_name=key,
+        object_name=cover_key,
     )
-    game.cover_key = key
+
+    # generate & upload thumbnail
+    try:
+        thumb_bytes = storage.generate_thumbnail(data, max_size=320)
+        thumb_key = storage.new_thumb_key(game_id, file.filename)
+        storage.put_object_from_fileobj(
+            fileobj=BytesIO(thumb_bytes),
+            length=len(thumb_bytes),
+            content_type="image/jpeg",
+            object_name=thumb_key,
+        )
+        game.thumb_key = thumb_key
+    except Exception:
+        # thumbnail generation failure shouldn't block upload
+        game.thumb_key = None
+
+    game.cover_key = cover_key
     db.add(game)
     db.commit()
-    url = storage.presigned_get_url(key)
+    url = storage.presigned_get_url(cover_key)
     return {"cover_url": url}
+
+
+@router.delete("/games/{game_id}/cover", status_code=204)
+def delete_cover(
+    game_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    game = db.get(models.Game, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if getattr(game, "cover_key", None):
+        try:
+            storage.delete_object(game.cover_key)  # 失敗は無視
+        finally:
+            game.cover_key = None
+            db.add(game)
+            db.commit()
+    return
+
+
+@router.get("/games/{game_id}/cover")
+def get_cover(game_id: int, size: str = Query("thumb"), db: Session = Depends(get_db)):
+    game = db.get(models.Game, game_id)
+    if not game or not getattr(game, "cover_key", None):
+        raise HTTPException(status_code=404, detail="Cover not found")
+    key = game.cover_key
+    if size == "thumb" and getattr(game, "thumb_key", None):
+        key = game.thumb_key
+    client = storage.get_client()
+    obj = client.get_object(storage.MINIO_BUCKET, key)
+
+    # ensure connection close after response is sent
+    def _cleanup():
+        try:
+            obj.close()
+        finally:
+            try:
+                obj.release_conn()
+            except Exception:
+                pass
+
+    media_type = obj.headers.get('Content-Type', 'application/octet-stream') if hasattr(obj, 'headers') else 'application/octet-stream'
+    return StreamingResponse(obj, media_type=media_type, background=BackgroundTask(_cleanup))
