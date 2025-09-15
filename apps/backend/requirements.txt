@@ -4,3 +4,6 @@ SQLAlchemy==2.0.34
 psycopg2-binary==2.9.9
 pydantic==2.9.2
 alembic==1.13.2
+passlib[bcrypt]==1.7.4
+PyJWT==2.9.0
+email-validator==2.2.0

@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlalchemy.exc import OperationalError
 
 from .db import Base, engine
-from .routers import games, reviews
+from .routers import games, reviews, auth as auth_router
 
 
 def create_app() -> FastAPI:
@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
     # Routers
     app.include_router(games.router, prefix="/api", tags=["games"])
     app.include_router(reviews.router, prefix="/api", tags=["reviews"])
+    app.include_router(auth_router.router, prefix="/api", tags=["auth"])
 
     @app.on_event("startup")
     def on_startup():

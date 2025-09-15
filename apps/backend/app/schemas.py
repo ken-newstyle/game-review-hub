@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import Optional
-from pydantic import BaseModel, Field, conint, field_validator
+from pydantic import BaseModel, Field, conint, field_validator, EmailStr
 
 
 class GameBase(BaseModel):
@@ -58,6 +58,30 @@ class ReviewCreate(ReviewBase):
 class ReviewRead(ReviewBase):
     id: int
     created_at: datetime
+    # 認証後に付与される（後方互換のためOptional）
+    user_id: int | None = None
 
     class Config:
         from_attributes = True
+
+
+class UserBase(BaseModel):
+    email: EmailStr
+
+
+class UserCreate(UserBase):
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class UserRead(UserBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
