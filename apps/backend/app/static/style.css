@@ -1,0 +1,21 @@
+:root{--bg:#0b0f14;--panel:#121821;--muted:#aab4c2;--text:#eaf0f6;--accent:#3cc68a;--accent-d:#2aa66f;--border:#223042;--radius:12px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+.gw-container{max-width:1040px;margin:0 auto;padding:0 16px}
+.gw-header{position:sticky;top:0;z-index:10;background:rgba(10,15,20,.8);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+.gw-flex{display:flex}.gw-between{justify-content:space-between}.gw-center{align-items:center}.gw-wrap{flex-wrap:wrap}
+.gw-accent{color:var(--accent)}.gw-brand{font-weight:800;letter-spacing:.2px;text-decoration:none;color:var(--text)}
+.gw-nav a,.gw-btn{margin-left:12px}
+.gw-main{padding:24px 0}
+.gw-card{background:linear-gradient(180deg,rgba(18,24,33,.95),rgba(18,24,33,.8));border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.gw-title{margin:0 0 4px;font-size:20px}.gw-muted{color:var(--muted)}.gw-small{font-size:12px}
+.gw-grid{display:grid}.gw-gap8{gap:8px}.gw-gap12{gap:12px}.gw-gap16{gap:16px}.gw-p24{padding:24px}.gw-mt8{margin-top:8px}.gw-mt16{margin-top:16px}.gw-mt24{margin-top:24px}
+.gw-input{width:100%;border:1px solid var(--border);background:#0f1420;color:var(--text);border-radius:10px;padding:10px 12px;outline:none}
+.gw-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(60,198,138,.15)}
+.gw-btn{border:1px solid var(--border);background:transparent;color:var(--text);padding:10px 14px;border-radius:10px;cursor:pointer}
+.gw-btn:hover{background:#0e1520}.gw-btn-primary{background:linear-gradient(180deg,var(--accent),var(--accent-d));border:none}
+.gw-btn-ghost{background:transparent;border:1px solid var(--border)}
+.gw-hero{margin-top:8px}.gw-search{display:flex;gap:8px}.gw-w80{width:80px}
+.gw-thumb{width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--border);background:#172030}
+.gw-card-title{margin:0 0 2px;font-size:16px;font-weight:700}
+.gw-msg{color:#ffc16b}
+

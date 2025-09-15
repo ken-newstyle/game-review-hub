@@ -1,11 +1,12 @@
 import time
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 import os
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 from sqlalchemy.exc import OperationalError, IntegrityError
-from sqlalchemy.exc import OperationalError
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from .db import Base, engine
 from .routers import games, reviews, auth as auth_router
@@ -29,6 +30,22 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    # Static / Templates
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
+    templates = Jinja2Templates(directory="app/templates")
+
+    @app.get("/", include_in_schema=False)
+    def index():
+        return RedirectResponse(url="/home", status_code=307)
+
+    @app.get("/login", include_in_schema=False)
+    def page_login(request: Request):
+        return templates.TemplateResponse("login.html", {"request": request})
+
+    @app.get("/home", include_in_schema=False)
+    def page_home(request: Request):
+        return templates.TemplateResponse("home.html", {"request": request})
 
     # Routers
     app.include_router(games.router, prefix="/api", tags=["games"])

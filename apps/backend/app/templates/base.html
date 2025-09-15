@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Game Review Hub{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header class="gw-header">
+      <div class="gw-container gw-flex gw-between gw-center">
+        <a class="gw-brand" href="/home">Game<span class="gw-accent">With</span>-ish</a>
+        <nav class="gw-nav">
+          <a href="/home">ホーム</a>
+          <a href="/login" id="nav-login">ログイン</a>
+          <button id="nav-logout" class="gw-btn gw-btn-ghost" style="display:none">ログアウト</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="gw-container gw-main">
+      {% block content %}{% endblock %}
+    </main>
+
+    <script>
+      (function(){
+        const token = localStorage.getItem('access_token');
+        const loginLink = document.getElementById('nav-login');
+        const logoutBtn = document.getElementById('nav-logout');
+        if (token) { if (loginLink) loginLink.style.display = 'none'; if (logoutBtn) logoutBtn.style.display = 'inline-block'; }
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', function(){ localStorage.removeItem('access_token'); location.href='/login'; });
+        }
+      })();
+    </script>
+    {% block scripts %}{% endblock %}
+  </body>
+  </html>
+

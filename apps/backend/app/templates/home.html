@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}ホーム | Game Review Hub{% endblock %}
+{% block content %}
+  <section class="gw-hero">
+    <h1 class="gw-title">ゲームレビュー</h1>
+    <p class="gw-muted">話題のタイトルをチェックして、レビューを投稿しよう。</p>
+    <div class="gw-search gw-mt16">
+      <input id="q" class="gw-input" placeholder="ゲーム名で検索" />
+      <button id="search" class="gw-btn gw-btn-primary">検索</button>
+    </div>
+  </section>
+
+  <section class="gw-grid gw-gap16 gw-mt24" id="games"></section>
+
+  <div class="gw-flex gw-center gw-gap8 gw-mt16">
+    <button class="gw-btn" id="prev">前へ</button>
+    <span id="page"></span>
+    <button class="gw-btn" id="next">次へ</button>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const API = (window.API_BASE || '/api');
+  let page = 1, limit = 8, q = '';
+  const $games = document.getElementById('games');
+  const $page = document.getElementById('page');
+  const token = () => localStorage.getItem('access_token');
+
+  async function load(){
+    const params = new URLSearchParams({ page, limit, sort:'created_at_desc' });
+    const r = await fetch(`${API}/games?${params}`);
+    const data = await r.json();
+    const items = data.items.filter(g => !q || g.title.toLowerCase().includes(q.toLowerCase()));
+    $games.innerHTML = items.map(g => card(g)).join('');
+    $page.textContent = `ページ ${page}`;
+    bindCardActions();
+  }
+
+  function card(g){
+    return `
+    <article class="gw-card gw-grid gw-gap8">
+      <div class="gw-flex gw-gap12">
+        <img class="gw-thumb" src="/api/games/${g.id}/cover?size=thumb" alt="${g.title}" onerror="this.style.display='none'" />
+        <div>
+          <h2 class="gw-card-title">${g.title}</h2>
+          <div class="gw-muted">${g.platform} ・ 平均 ${g.avg_rating.toFixed(2)}</div>
+          ${g.released_on ? `<div class="gw-muted gw-small">発売日: ${g.released_on}</div>` : ''}
+        </div>
+      </div>
+      <form class="gw-grid gw-gap8 gw-mt8 js-review" data-id="${g.id}">
+        <div class="gw-flex gw-gap8 gw-wrap">
+          <input class="gw-input gw-w80" type="number" min="1" max="5" value="5" name="rating" />
+          <input class="gw-input" placeholder="コメント（任意）" name="comment" />
+          <button class="gw-btn gw-btn-primary" type="submit">レビュー投稿</button>
+        </div>
+      </form>
+      <form class="gw-grid gw-gap8 gw-mt8 js-cover" data-id="${g.id}">
+        <div class="gw-flex gw-gap8 gw-wrap">
+          <input class="gw-input" type="file" accept="image/*" name="file" />
+          <button class="gw-btn" type="submit">カバーをアップロード</button>
+        </div>
+      </form>
+    </article>`;
+  }
+
+  function bindCardActions(){
+    document.querySelectorAll('.js-review').forEach(f => {
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = f.dataset.id;
+        const form = new FormData(f);
+        const rating = Number(form.get('rating') || 5);
+        const comment = String(form.get('comment') || '');
+        try {
+          const r = await fetch(`${API}/reviews`, {
+            method:'POST', headers:{'Content-Type':'application/json', ...(token()?{Authorization:`Bearer ${token()}`}:{})},
+            body: JSON.stringify({ game_id:Number(id), rating, comment: comment || null })
+          });
+          if (r.status === 401) { localStorage.removeItem('access_token'); alert('再ログインしてください'); location.href='/login'; return; }
+          if (!r.ok) throw new Error('投稿に失敗');
+          await load();
+        } catch(err){ alert(err.message || 'エラー'); }
+      });
+    });
+
+    document.querySelectorAll('.js-cover').forEach(f => {
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = f.dataset.id; const file = f.querySelector('input[type=file]').files[0];
+        if (!file) return;
+        const form = new FormData(); form.append('file', file);
+        try {
+          const r = await fetch(`${API}/games/${id}/cover`, { method:'POST', headers: { ...(token()?{Authorization:`Bearer ${token()}`}:{}) }, body: form });
+          if (r.status === 401) { localStorage.removeItem('access_token'); alert('再ログインしてください'); location.href='/login'; return; }
+          if (!r.ok) throw new Error('アップロードに失敗');
+          await load();
+        } catch(err){ alert(err.message || 'エラー'); }
+      });
+    });
+  }
+
+  document.getElementById('prev').onclick = () => { if (page>1) { page--; load(); } };
+  document.getElementById('next').onclick = () => { page++; load(); };
+  document.getElementById('search').onclick = () => { q = document.getElementById('q').value; page=1; load(); };
+  load();
+</script>
+{% endblock %}
+
