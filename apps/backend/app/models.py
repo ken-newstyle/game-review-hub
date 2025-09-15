@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from .db import Base
@@ -7,6 +7,9 @@ from .db import Base
 
 class Game(Base):
     __tablename__ = "games"
+    __table_args__ = (
+        UniqueConstraint("title", "platform", name="uq_games_title_platform"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False, index=True)
@@ -27,4 +30,3 @@ class Review(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     game = relationship("Game", back_populates="reviews")
-

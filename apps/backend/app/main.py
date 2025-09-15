@@ -1,6 +1,9 @@
 import time
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
+from sqlalchemy.exc import OperationalError, IntegrityError
 from sqlalchemy.exc import OperationalError
 
 from .db import Base, engine
@@ -40,8 +43,44 @@ def create_app() -> FastAPI:
                     raise
                 time.sleep(3)
 
+    # Error handlers (unified response shape)
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(_, exc: RequestValidationError):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": {
+                    "code": "validation_error",
+                    "message": "Invalid request",
+                    "details": exc.errors(),
+                }
+            },
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(_, exc: HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": {
+                    "code": "http_error",
+                    "message": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
+                }
+            },
+        )
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_exception_handler(_, exc: IntegrityError):
+        # 23505 = unique_violation (psycopg2)
+        msg = "Integrity error"
+        if hasattr(exc.orig, "pgcode") and getattr(exc.orig, "pgcode") == "23505":
+            msg = "Duplicate resource"
+            status = 409
+        else:
+            status = 400
+        return JSONResponse(status_code=status, content={"error": {"code": "integrity_error", "message": msg}})
+
     return app
 
 
 app = create_app()
-

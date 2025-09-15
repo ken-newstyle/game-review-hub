@@ -1,12 +1,28 @@
 from datetime import date, datetime
 from typing import Optional
-from pydantic import BaseModel, Field, conint
+from pydantic import BaseModel, Field, conint, field_validator
 
 
 class GameBase(BaseModel):
-    title: str = Field(..., max_length=255)
-    platform: str = Field(..., max_length=100)
+    title: str = Field(..., min_length=1, max_length=255)
+    platform: str = Field(..., min_length=1, max_length=100)
     released_on: Optional[date] = None
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("title must not be blank")
+        return v
+
+    @field_validator("platform")
+    @classmethod
+    def normalize_platform(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("platform must not be blank")
+        return v
 
 
 class GameCreate(GameBase):
@@ -22,10 +38,17 @@ class GameRead(GameBase):
         from_attributes = True
 
 
+class GamePage(BaseModel):
+    items: list[GameRead]
+    total: int
+    page: int
+    limit: int
+
+
 class ReviewBase(BaseModel):
     game_id: int
     rating: conint(ge=1, le=5)
-    comment: Optional[str] = None
+    comment: Optional[str] = Field(None, max_length=1000)
 
 
 class ReviewCreate(ReviewBase):
@@ -38,4 +61,3 @@ class ReviewRead(ReviewBase):
 
     class Config:
         from_attributes = True
-
