@@ -33,6 +33,7 @@ class GameRead(GameBase):
     id: int
     created_at: datetime
     avg_rating: float = 0.0
+    cover_url: str | None = None
 
     class Config:
         from_attributes = True

@@ -18,6 +18,7 @@ import {
   CardHeader,
   CardBody,
   Divider,
+  Image,
 } from '@chakra-ui/react'
 
 type Game = {
@@ -27,6 +28,7 @@ type Game = {
   released_on?: string | null
   created_at: string
   avg_rating: number
+  cover_url?: string | null
 }
 
 const apiBase = (import.meta.env.VITE_API_BASE as string) ?? 'http://localhost:4000/api'
@@ -145,12 +147,23 @@ export default function App() {
                     <Card key={g.id} variant="outline">
                       <CardBody>
                         <Flex gap={6} align={{ base: 'stretch', md: 'flex-start' }} justify="space-between" direction={{ base: 'column', md: 'row' }}>
-                          <Box>
-                            <Heading size="md" mb={1}>{g.title}</Heading>
-                            <Text color="whiteAlpha.800">{g.platform} ・ 平均スコア: {g.avg_rating.toFixed(2)}</Text>
-                            {g.released_on && <Text fontSize="sm" color="whiteAlpha.600">発売日: {g.released_on}</Text>}
+                          <Box display="flex" gap={4} alignItems="flex-start">
+                            {g.cover_url ? (
+                              <Image src={g.cover_url} alt={`${g.title} cover`} borderRadius="md" boxSize="120px" objectFit="cover" />
+                            ) : (
+                              <Box boxSize="120px" bg="gray.700" borderRadius="md" />
+                            )}
+                            <Box>
+                              <Heading size="md" mb={1}>{g.title}</Heading>
+                              <Text color="whiteAlpha.800">{g.platform} ・ 平均スコア: {g.avg_rating.toFixed(2)}</Text>
+                              {g.released_on && <Text fontSize="sm" color="whiteAlpha.600">発売日: {g.released_on}</Text>}
+                            </Box>
                           </Box>
-                          <ReviewBox gameId={g.id} onPosted={fetchGames} />
+                          <Box>
+                            <ReviewBox gameId={g.id} onPosted={fetchGames} />
+                            {/* 画像アップロード（ログイン時） */}
+                            <CoverUpload tokenKey="access_token" gameId={g.id} onUploaded={fetchGames} />
+                          </Box>
                         </Flex>
                       </CardBody>
                     </Card>
@@ -177,6 +190,7 @@ function ReviewBox({ gameId, onPosted }: { gameId: number; onPosted: () => void 
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -185,7 +199,10 @@ function ReviewBox({ gameId, onPosted }: { gameId: number; onPosted: () => void 
     try {
       const res = await fetch(`${apiBase}/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ game_id: gameId, rating, comment: comment || null })
       })
       if (!res.ok) throw new Error(`Failed: ${res.status}`)
@@ -202,14 +219,53 @@ function ReviewBox({ gameId, onPosted }: { gameId: number; onPosted: () => void 
   return (
     <Box as="form" onSubmit={submit} width={{ base: '100%', md: 80 }}>
       <Stack spacing={2}>
+        {!token && <Text fontSize="sm" color="whiteAlpha.700">レビュー投稿にはログインが必要です</Text>}
         <Text fontSize="sm" color="whiteAlpha.700">スコア</Text>
-        <NumberInput min={1} max={5} value={rating} onChange={(_, n) => setRating(Number.isNaN(n) ? 1 : n)}>
+        <NumberInput min={1} max={5} value={rating} onChange={(_, n) => setRating(Number.isNaN(n) ? 1 : n)} isDisabled={!token}>
           <NumberInputField />
         </NumberInput>
-        <Input placeholder="コメント（任意）" value={comment} onChange={(e) => setComment(e.target.value)} />
-        <Button type="submit" colorScheme="blue" isLoading={busy}>レビュー投稿</Button>
+        <Input placeholder="コメント（任意）" value={comment} onChange={(e) => setComment(e.target.value)} isDisabled={!token} />
+        <Button type="submit" colorScheme="blue" isLoading={busy} isDisabled={!token}>レビュー投稿</Button>
         {error && <Text color="red.300" fontSize="sm">{error}</Text>}
       </Stack>
     </Box>
+  )
+}
+
+function CoverUpload({ tokenKey, gameId, onUploaded }: { tokenKey: string; gameId: number; onUploaded: () => void }) {
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const toast = useToast()
+  const token = typeof window !== 'undefined' ? localStorage.getItem(tokenKey) : null
+
+  const upload = async () => {
+    if (!file || !token) return
+    setBusy(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${apiBase}/games/${gameId}/cover`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      if (!res.ok) throw new Error(`Failed: ${res.status}`)
+      setFile(null)
+      onUploaded()
+      toast({ title: 'カバー画像を更新しました', status: 'success' })
+    } catch (e: any) {
+      toast({ title: 'アップロードに失敗', description: String(e.message ?? e), status: 'error' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!token) return null
+
+  return (
+    <Stack mt={4} spacing={2}>
+      <Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+      <Button size="sm" onClick={upload} isDisabled={!file} isLoading={busy} colorScheme="blue">カバーをアップロード</Button>
+    </Stack>
   )
 }

@@ -8,6 +8,7 @@ from sqlalchemy.exc import OperationalError
 
 from .db import Base, engine
 from .routers import games, reviews, auth as auth_router
+from . import storage
 
 
 def create_app() -> FastAPI:
@@ -37,6 +38,8 @@ def create_app() -> FastAPI:
         while True:
             try:
                 Base.metadata.create_all(bind=engine)
+                # MinIO バケットの確保
+                storage.ensure_bucket()
                 break
             except OperationalError:
                 attempts += 1

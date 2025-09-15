@@ -5,6 +5,9 @@ from sqlalchemy import select, func
 
 from ..db import get_db
 from .. import models, schemas
+from .. import storage
+from fastapi import UploadFile, File
+from ..auth import get_current_user
 
 
 router = APIRouter()
@@ -57,17 +60,20 @@ def list_games(
     stmt = stmt.limit(limit).offset(offset)
 
     rows = db.execute(stmt).all()
-    items = [
-        schemas.GameRead(
-            id=g.id,
-            title=g.title,
-            platform=g.platform,
-            released_on=g.released_on,
-            created_at=g.created_at,
-            avg_rating=float(avg) if avg is not None else 0.0,
+    items: list[schemas.GameRead] = []
+    for g, avg in rows:
+        cover_url = storage.presigned_get_url(g.cover_key) if getattr(g, "cover_key", None) else None
+        items.append(
+            schemas.GameRead(
+                id=g.id,
+                title=g.title,
+                platform=g.platform,
+                released_on=g.released_on,
+                created_at=g.created_at,
+                avg_rating=float(avg) if avg is not None else 0.0,
+                cover_url=cover_url,
+            )
         )
-        for g, avg in rows
-    ]
 
     return schemas.GamePage(items=items, total=int(total), page=page, limit=limit)
 
@@ -98,4 +104,29 @@ def create_game(payload: schemas.GameCreate, db: Session = Depends(get_db)):
         released_on=game.released_on,
         created_at=game.created_at,
         avg_rating=0.0,
+        cover_url=None,
     )
+
+
+@router.post("/games/{game_id}/cover", status_code=201)
+def upload_cover(
+    game_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    game = db.get(models.Game, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    key = storage.new_cover_key(game_id, file.filename)
+    storage.put_object_from_fileobj(
+        file.file,
+        length=-1,
+        content_type=file.content_type or "application/octet-stream",
+        object_name=key,
+    )
+    game.cover_key = key
+    db.add(game)
+    db.commit()
+    url = storage.presigned_get_url(key)
+    return {"cover_url": url}
