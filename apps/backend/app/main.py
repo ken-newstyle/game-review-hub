@@ -1,6 +1,7 @@
 import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import os
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse
 from sqlalchemy.exc import OperationalError, IntegrityError
@@ -14,12 +15,15 @@ from . import storage
 def create_app() -> FastAPI:
     app = FastAPI(title="Game Review Hub API", version="0.1.0")
 
+    # CORS: 明示的にフロントのオリジンを許可（credentials対応のためワイルドカードを避ける）
+    frontend_origins = os.getenv("FRONTEND_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+    allow_origins = [o.strip() for o in frontend_origins.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=allow_origins,
         allow_credentials=True,
         allow_methods=["*"],
-        allow_headers=["*"],
+        allow_headers=["*"]
     )
 
     @app.get("/health")

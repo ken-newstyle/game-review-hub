@@ -42,6 +42,8 @@ export default function App() {
   const [limit] = useState(10)
   const [total, setTotal] = useState(0)
   const [sort, setSort] = useState('created_at_desc')
+  const [auth, setAuth] = useState({ email: '', password: '' })
+  const [token, setToken] = useState<string | null>(() => (typeof window !== 'undefined' ? localStorage.getItem('access_token') : null))
   const toast = useToast()
 
   const fetchGames = async () => {
@@ -59,6 +61,44 @@ export default function App() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const doRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const res = await fetch(`${apiBase}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: auth.email, password: auth.password })
+      })
+      if (!res.ok) throw new Error(`Failed: ${res.status}`)
+      toast({ title: '登録しました。ログインしてください', status: 'success' })
+    } catch (e: any) {
+      toast({ title: '登録に失敗', description: String(e.message ?? e), status: 'error' })
+    }
+  }
+
+  const doLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const res = await fetch(`${apiBase}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: auth.email, password: auth.password })
+      })
+      if (!res.ok) throw new Error(`Failed: ${res.status}`)
+      const data: { access_token: string } = await res.json()
+      localStorage.setItem('access_token', data.access_token)
+      setToken(data.access_token)
+      toast({ title: 'ログインしました', status: 'success' })
+    } catch (e: any) {
+      toast({ title: 'ログインに失敗', description: String(e.message ?? e), status: 'error' })
+    }
+  }
+
+  const doLogout = () => {
+    localStorage.removeItem('access_token')
+    setToken(null)
   }
 
   useEffect(() => {
@@ -103,6 +143,21 @@ export default function App() {
 
       <Container maxW="6xl" py={6}>
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
+          <Card>
+            <CardHeader><Heading size="md">ログイン / 登録</Heading></CardHeader>
+            <CardBody>
+              <Stack spacing={3} as="form" onSubmit={token ? (e) => { e.preventDefault(); doLogout() } : doLogin}>
+                <Input type="email" placeholder="メールアドレス" value={auth.email} onChange={(e) => setAuth({ ...auth, email: e.target.value })} required />
+                <Input type="password" placeholder="パスワード（8文字以上）" value={auth.password} onChange={(e) => setAuth({ ...auth, password: e.target.value })} required />
+                <Flex gap={3} wrap="wrap">
+                  {!token && <Button type="submit" colorScheme="blue">ログイン</Button>}
+                  {!token && <Button variant="outline" onClick={doRegister} type="button">登録</Button>}
+                  {token && <Button colorScheme="red" onClick={doLogout} type="button">ログアウト</Button>}
+                </Flex>
+                {token && <Text fontSize="sm" color="whiteAlpha.700">ログイン中</Text>}
+              </Stack>
+            </CardBody>
+          </Card>
           <Card>
             <CardHeader><Heading size="md">ゲームを追加</Heading></CardHeader>
             <CardBody>
